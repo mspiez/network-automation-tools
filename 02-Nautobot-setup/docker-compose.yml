@@ -1,0 +1,111 @@
+---
+version: "3.7"
+services:
+  nautobot:
+    container_name: nautobot
+    build:
+      context: ./nautobot
+      dockerfile: "Dockerfile"
+    image: "nautobot:${NAUTOBOT_VERSION}"
+    env_file:
+      - "./nautobot/local.env"
+    ports:
+      - "8443:8443"
+      - "8080:8080"
+    restart: "unless-stopped"
+    volumes:
+      - "./nautobot/populate_data.py:/opt/nautobot/utils/populate_data.py"
+    networks:
+      - automation_net
+  nautobot-worker:
+    container_name: nautobot_worker
+    build:
+      context: ./nautobot
+      dockerfile: "Dockerfile"
+    image: "nautobot:${NAUTOBOT_VERSION}"
+    env_file:
+      - "./nautobot/local.env"
+    entrypoint: "nautobot-server rqworker"
+    depends_on:
+      - "nautobot"
+    restart: "unless-stopped"
+    networks:
+      - automation_net
+  # ----------------------------------
+  # Celery worker must only be used in > 1.1.0 installs. If setting to a previous install, remove this worker
+  # ----------------------------------
+  celery_worker:
+    container_name: nautobot_celery_worker
+    build:
+      context: ./nautobot
+      dockerfile: "Dockerfile"
+    image: "nautobot:${NAUTOBOT_VERSION}"
+    entrypoint: "sh -c 'nautobot-server celery worker -l $$NAUTOBOT_LOG_LEVEL'"
+    healthcheck:
+      interval: "5s"
+      timeout: "5s"
+      start_period: "5s"
+      retries: 3
+      test: ["CMD", "nautobot-server", "health_check"]
+    depends_on:
+      - "nautobot"
+      - "redis"
+    env_file:
+      - "./nautobot/local.env"
+    tty: true
+    networks:
+      - automation_net
+  # ----------------------------------
+  # Celery beat must only be used in > 1.2.0 installs. If setting to a previous install, remove this worker
+  # ----------------------------------
+  celery_beat:
+    container_name: nautobot_celery_beat
+    build:
+      context: ./nautobot
+      dockerfile: "Dockerfile"
+    image: "nautobot:${NAUTOBOT_VERSION}"
+    entrypoint: "sh -c 'nautobot-server celery beat -l $$NAUTOBOT_LOG_LEVEL'"
+    healthcheck:
+      interval: "5s"
+      timeout: "5s"
+      start_period: "5s"
+      retries: 3
+      test: ["CMD", "nautobot-server", "health_check"]
+    depends_on:
+      - "nautobot"
+      - "redis"
+    env_file:
+      - "./nautobot/local.env"
+    tty: true
+    networks:
+      - automation_net
+  redis:
+    container_name: nautboot_redis
+    image: "redis:alpine"
+    env_file:
+      - "./nautobot/local.env"
+    command:
+      - "sh"
+      - "-c"  # this is to evaluate the $REDIS_PASSWORD from the env
+      - "redis-server --appendonly yes --requirepass $$NAUTOBOT_REDIS_PASSWORD"  ## $$ because of docker-compose
+    restart: "unless-stopped"
+    networks:
+      - automation_net
+  db:
+    container_name: nautboot_db
+    image: "postgres:14"
+    env_file:
+      - "./nautobot/local.env"
+    environment:
+      NAUTOBOT_DB_ENGINE: "django.db.backends.postgres"
+    volumes:
+      - "db_data:/var/lib/postgresql/data"
+    restart: "unless-stopped"
+    networks:
+      - automation_net
+volumes:
+  db_data:
+
+networks:
+  automation_net:
+    external: true

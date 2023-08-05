@@ -1,0 +1,33 @@
+---
+version: "3.7"
+services:
+  network_importer:
+    container_name: "network_importer"
+    build:
+      context: "./network_importer"
+      dockerfile: "Dockerfile"
+    image: "network_importer:3.1.0"
+    stdin_open: true
+    tty: true
+    env_file:
+      - "./network_importer/local.env"
+    depends_on:
+      - "batfish"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - automation_net
+  batfish:
+    container_name: "batfish"
+    image: "batfish/batfish:2020.10.08.667"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9997:9997"
+      - "9996:9996"
+    networks:
+      - automation_net
+
+networks:
+  automation_net:
+    external: true

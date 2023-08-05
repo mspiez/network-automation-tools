@@ -1,0 +1,57 @@
+!R2#show running-config 
+! Command: show running-config
+! device: R2 (vEOS-lab, EOS-4.28.3M)
+!
+! boot system flash:/vEOS-lab.swi
+!
+no aaa root
+!
+username admin role network-admin secret sha512 $6$Tk2hhyEz4/YJhjIG$1arK4JeCYwxx407OmAshcrIg/nFCGhttJBeI9hv58t7zK20T4w7xLRw1XDpLG4ooe/TrO03PHqDi4vbmk2i3m1
+!
+transceiver qsfp default-mode 4x10G
+!
+service routing protocols model ribd
+!
+hostname R2
+!
+spanning-tree mode mstp
+!
+clock timezone Poland
+!
+management api http-commands
+   no shutdown
+!
+management api gnmi
+   transport grpc GRPC
+      ssl profile test-arista
+      port 3333
+   !
+   transport grpc def
+      vrf MGMT
+   !
+   transport grpc openmgmt
+   provider eos-native
+!
+management security
+   ssl profile test-arista
+      certificate r2.crt key r2.key
+!
+interface Ethernet1
+   mac-address 52:54:00:c9:b0:88
+   no switchport
+   ip address 192.168.1.2/30
+!
+interface Ethernet2
+   mac-address 52:54:00:f5:79:7f
+   no switchport
+   ip address 192.168.1.6/30
+!
+interface Management1
+   ip address 192.168.122.3/24
+!
+ip routing
+!
+router bgp 65000
+   neighbor 192.168.122.2 remote-as 65000
+!
+end

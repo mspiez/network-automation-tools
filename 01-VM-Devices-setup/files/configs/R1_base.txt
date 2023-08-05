@@ -1,0 +1,38 @@
+
+! Command: show running-config
+!
+! boot system flash:/vEOS-lab.swi
+!
+no aaa root
+!
+username admin role network-admin secret sha512 $6$e6pJRJK/vVBGfDWe$JPVpxhkbsnNtuo2gnfaA27DN.0PTLs3bKOVoPKV2sV.EL1g.xR4GKwYmdTze332jHq0LrhuKlm1VtGYToRXRs.
+!
+trace OpenConfig setting server*/9
+!
+transceiver qsfp default-mode 4x10G
+!
+service routing protocols model ribd
+!
+hostname R1
+!
+spanning-tree mode mstp
+!
+clock timezone Poland
+!
+management api http-commands
+   no shutdown
+!
+interface Ethernet1
+   no switchport
+   ip address 192.168.1.1/30
+!
+interface Ethernet2
+   no switchport
+   ip address 192.168.1.5/30
+!
+interface Management1
+   ip address 192.168.10.1/24
+!
+ip routing
+!
+end

@@ -1,0 +1,4 @@
+nautobot-device-onboarding==1.1.2
+pycountry==22.3.5
+git+https://github.com/mspiez/nautobot-plugin-interfaces-telemetry
+git+https://github.com/nautobot/nautobot-plugin-ssot.git@v1.3.2
