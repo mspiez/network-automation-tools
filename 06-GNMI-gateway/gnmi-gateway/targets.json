@@ -1,0 +1,46 @@
+{
+  "request": {
+    "default": {
+      "subscribe": {
+        "prefix": {
+        },
+        "subscription": [
+          {
+            "path": {
+              "elem": [
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "target": {
+    "R1": {
+      "addresses": [
+        "R1:3333"
+      ],
+      "credentials": {
+        "username": "admin",
+        "password": "admin"
+      },
+      "request": "default",
+      "meta": {
+        "NoTLSVerify": "yes"
+      }
+    },
+    "R2": {
+      "addresses": [
+        "R2:3333"
+      ],
+      "credentials": {
+        "username": "admin",
+        "password": "admin"
+      },
+      "request": "default",
+      "meta": {
+        "NoTLSVerify": "yes"
+      }
+    }
+  }
+}

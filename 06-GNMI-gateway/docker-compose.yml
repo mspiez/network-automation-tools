@@ -1,0 +1,32 @@
+---
+version: "3.7"
+services:
+  gnmi-gateway:
+    container_name: gnmi-gateway
+    build:
+      context: "./gnmi-gateway"
+      dockerfile: "Dockerfile"
+    image: "gnmi-gateway:latest"
+    ports:
+      - "59100:59100"
+    restart: "unless-stopped"
+    volumes:
+      - "./gnmi-gateway/targets.json:/opt/gnmi-gateway/targets.json"
+    networks:
+      - automation_net
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus-01
+    hostname: prometheus-01
+    command: --config.file=/etc/prometheus/prometheus.yml
+    networks:
+      - automation_net
+    restart: "unless-stopped"
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+networks:
+  automation_net:
+    external: true
