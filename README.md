@@ -90,3 +90,36 @@ Usually the steps come down to copying and pasting commands into the terminal an
 </details>
 
 -------------------------------------------------------------------------
+
+## [GNMI gateway setup](./06-GNMI-gateway)
+
+<details><summary>Techonology used</summary>
+<code>
+
+- Nautobot
+- GIT
+- docker-compose
+- Python3
+- GNMI gateway
+- Prometheus
+</code>
+</details>
+
+-------------------------------------------------------------------------
+
+## [GNMI gateway and Nautobot setup](./07-GNMI-gateway-and-Nautobot)
+
+<details><summary>Techonology used</summary>
+<code>
+
+- Nautobot
+- GIT
+- docker-compose
+- Python3
+- GNMI gateway
+- Nautobot GO client
+- Nauotobot Plugin - Interfaces telemetry
+</code>
+</details>
+
+-------------------------------------------------------------------------

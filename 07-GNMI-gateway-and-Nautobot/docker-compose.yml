@@ -1,0 +1,24 @@
+---
+version: "3.7"
+services:
+  gnmi-gateway:
+    container_name: gnmi-gateway
+    build:
+      context: "./gnmi-gateway"
+      dockerfile: "Dockerfile"
+    image: "gnmi-gateway:latest"
+    ports:
+      - "59100:59100"
+    restart: "unless-stopped"
+    volumes:
+      - "./gnmi-gateway/targets.json:/opt/gnmi-gateway/targets.json"
+    networks:
+      - automation_net
+    env_file:
+      - "./gnmi-gateway/local.env"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  automation_net:
+    external: true
