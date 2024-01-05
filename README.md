@@ -123,3 +123,16 @@ Usually the steps come down to copying and pasting commands into the terminal an
 </details>
 
 -------------------------------------------------------------------------
+
+## [Telegraf setup](./08-Telegraf-setup)
+
+<details><summary>Techonology used</summary>
+<code>
+
+- Telegraf
+- SNMP
+- Prometheus
+</code>
+</details>
+
+-------------------------------------------------------------------------
