@@ -4,7 +4,7 @@ The intention of this project is to help engineers begin their journey into netw
 
 Getting familiar with each technology takes time, and without proper background, setting up a single standalone tool for testing may be cumbersome and discouraging.
 
-The series of tutorials in this project will help set up the environment and focus only on the features and benefits of the tools.
+The series of tutorials in this project will help set up the environment and focus only on the features and benefits/drawbacks of the tools.
 
 Usually the steps come down to copying and pasting commands into the terminal and then building and starting containers.
 
@@ -133,6 +133,18 @@ Usually the steps come down to copying and pasting commands into the terminal an
 - SNMP
 - Prometheus
 </code>
+</details>
+
+-------------------------------------------------------------------------
+
+## [Telegraf and Grafana](./09-Telegraf-and-Grafana)
+
+<details><summary>Techonology used</summary>
+
+- Telegraf
+- SNMP
+- Prometheus
+- Grafana
 </details>
 
 -------------------------------------------------------------------------
