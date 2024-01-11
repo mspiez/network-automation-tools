@@ -1,7 +1,7 @@
 # Telgraf and Grafana
 
 Collecting metrics using Telegraf and Prometheus is great, but without proper visualization it is not that useful.
-Obviously using prometheus query language(promQL) could be used directly form Prometheus instance, but still it much more intuitive to look at Grafana UI.
+Obviously using prometheus query language(promQL) could be used directly form Prometheus instance, but still it is much more intuitive to look at Grafana UI.
 
 In this tutorial, metrics around uptime, CPU, memory, interfaces are being collected from R1 and R2, passed to Prometheus and finally presented in Grafana UI. There no much more work to be done then just run following command:
 
