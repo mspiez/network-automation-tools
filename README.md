@@ -130,3 +130,15 @@ Usually the steps come down to copying and pasting commands into the terminal an
 </details>
 
 -------------------------------------------------------------------------
+
+## [AWX setup](./10-AWX-setup)
+
+<details><summary>Techonology used</summary>
+
+- Minikube
+- helm
+- awx-operator
+- AWX
+</details>
+
+-------------------------------------------------------------------------
