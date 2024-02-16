@@ -15,130 +15,60 @@ Usually the steps come down to copying and pasting commands into the terminal an
 
 ## [VM Devices setup](./01-VM-Devices-setup)
 
-<details><summary>Techonology used</summary>
-
-- Arista
-- KVM
-- Linux Bridging brctl
-- virsh
-</details>
+Arista | KVM | Linux Bridging brctl | virsh
 
 ------------------------------------------------------------------
 
 ## [Nautobot setup](./02-Nautobot-setup)
 
-<details><summary>Techonology used</summary>
-
-- Nautobot 
-- GIT
-- Docker
-- docker-compose
-- Python3
-</details>
+Nautobot | GIT | Docker | docker-compose | Python3
 
 -------------------------------------------------------------------------
 
 ## [Nautobot devices onboarding](./03-Nautobot-devices-onboarding)
 
-<details><summary>Techonology used</summary>
-
-- Nautobot 
-- GIT
-- Docker
-- docker-compose
-- Python3
-- Nauotobot Plugin - device onboarding
-</details>
+Nautobot | GIT | Docker | docker-compose | Python3 | Nauotobot Plugin - device onboarding
 
 -------------------------------------------------------------------------
 
 ## [Nautobot network importer](./04-Nautobot-network-importer)
 
-<details><summary>Techonology used</summary>
-
-- Nautobot
-- GIT
-- Docker
-- docker-compose
-- Python3
-- Network importer
-</details>
+Nautobot | GIT | Docker | docker-compose | Python3 | Network importer
 
 -------------------------------------------------------------------------
 
 ## [Nautobot Plugin Installation](./05-Nautobot-custom-plugin-installation)
 
-<details><summary>Techonology used</summary>
-
-- Nautobot
-- GIT
-- Docker
-- docker-compose
-- Python3
-- Nauotobot Plugin - Interfaces telemetry
-- Nauotobot Plugin - SSOT(Single Source of Truth)
-</details>
+Nautobot | GIT | Docker | docker-compose | Python3 | Nauotobot Plugin - Interfaces telemetry | Nauotobot Plugin - SSOT(Single Source of Truth)
 
 -------------------------------------------------------------------------
 
 ## [GNMI gateway setup](./06-GNMI-gateway)
 
-<details><summary>Techonology used</summary>
-
-- GIT
-- docker-compose
-- GNMI gateway
-- Prometheus
-</details>
+GIT | docker-compose | GNMI gateway | Prometheus
 
 -------------------------------------------------------------------------
 
 ## [GNMI gateway and Nautobot setup](./07-GNMI-gateway-and-Nautobot)
 
-<details><summary>Techonology used</summary>
-
-- Nautobot
-- GIT
-- docker-compose
-- Python3
-- GNMI gateway
-- Nautobot GO client
-- Nauotobot Plugin - Interfaces telemetry
-</details>
+Nautobot | GIT | docker-compose | Python3 | GNMI gateway | Nautobot GO client | Nauotobot Plugin - Interfaces telemetry
 
 -------------------------------------------------------------------------
 
 ## [Telegraf setup](./08-Telegraf-setup)
 
-<details><summary>Techonology used</summary>
-
-- Telegraf
-- SNMP
-- Prometheus
-</details>
+Telegraf | SNMP | Prometheus
 
 -------------------------------------------------------------------------
 
 ## [Telegraf and Grafana](./09-Telegraf-and-Grafana)
 
-<details><summary>Techonology used</summary>
-
-- Telegraf
-- SNMP
-- Prometheus
-- Grafana
-</details>
+Telegraf | SNMP | Prometheus | Grafana
 
 -------------------------------------------------------------------------
 
 ## [AWX setup](./10-AWX-setup)
 
-<details><summary>Techonology used</summary>
-
-- Minikube
-- helm
-- awx-operator
-- AWX
-</details>
+Minikube | helm | awx-operator | AWX
 
 -------------------------------------------------------------------------
