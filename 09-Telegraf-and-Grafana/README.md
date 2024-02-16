@@ -1,9 +1,9 @@
 # Telgraf and Grafana
 
 Collecting metrics using Telegraf and Prometheus is great, but without proper visualization it is not that useful.
-Obviously using prometheus query language(promQL) could be used directly form Prometheus instance, but still it is much more intuitive to look at Grafana UI.
+Obviously using prometheus query language(promQL) can be used directly form Prometheus instance, but still it is much more intuitive to use Grafana UI.
 
-In this tutorial, metrics around uptime, CPU, memory, interfaces are being collected from R1 and R2, passed to Prometheus and finally presented in Grafana UI. There no much more work to be done then just run following command:
+In this tutorial, metrics like uptime, CPU, memory, interfaces are being collected from R1 and R2, passed to Prometheus and finally presented in Grafana UI. There not much more work to be done then just run following command:
 
 ```
 $ docker-compose up
@@ -45,6 +45,4 @@ Try expanding the panels by clicking on each description:
 
 ## Conclusion
 
-Grafana is great tool to be used with networking metrics and definitely help with monitoring networking devices, but also many others like visualize alerts or troubleshoot services degradation in particular region and so on.
-
-
+Grafana is great tool to be used with networking metrics and definitely can help with monitoring networking devices, but also alerts visualization, troubleshooting degraded services and for sure many others.
