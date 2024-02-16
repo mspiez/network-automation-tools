@@ -1,51 +1,64 @@
 # Nautobot custom plugin installation
 
 ## Overview
------------
 
-In previous sections we already installed one Nautobot plugin: `Devices Onboarding`.
+In previous sections we already installed some well known Nautobot plugins like `Devices Onboarding`, `SSOT` or `Configuration Compliance` plugin.
 
-Now let's install following ones:
-- [nautobot-plugin-ssot](https://github.com/nautobot/nautobot-plugin-ssot)
+Now let's install our own custom made plugin:
 - [nautobot-plugin-interfaces-telemetry](https://github.com/mspiez/nautobot-plugin-interfaces-telemetry)
 
-SSOT plugin is used to sync data between multiple data sources(SoT) while interfaces telemetry plugin is just extension of the configuration data in Nautobot with Interface State data that you would usually see in monitoring tools like Grafana.
+This is a crazy idea of adding a extension to the Nautobot interfaces where we could present the state of the device interfaces.
+
+It's not common approach to keep state data in SoT systems, but let's try to do this with our custom plugin just for fun.
 
 ## Setup
---------
 
-Let's install new plugins and make sure they are available in Nautobot UI.
+Nautobot setup is described in one of the previous tutorials, but let's repeat the steps in case this is the first time you install Nautobot. 
 
-First make sure to setup ENV variables as such:
+Clone nautobot repo into the `source` directory and then copy poetry dependency files adequately:
+
 ```
-$ export NAUTOBOT_VERSION=1.5.22
-$ export NAUTOBOT_PYTHON_VERSION=3.9
+$ git clone https://github.com/nautobot/nautobot.git --branch v2.1.1 source
+$ cp nautobot/pyproject.toml nautobot/poetry.lock ./source
 ```
 
-Next, make sure that `automation_net` is created on the local system:
+Make sure to setup ENV variables as such:
+```
+$ export NAUTOBOT_VERSION=2.1.1
+$ export PYTHON_VER=3.9
+```
+
+> Note: Optionally if not done already, create Docker network that containers will be using to communicate with each other:
 ```
 $ docker network create --driver bridge automation_net
 ```
 
-Now, docker images have to be build with `docker-compose build` command and arguments:
+Build images with `docker-compose build` command and some arguments:
 
 ```
-docker-compose build --build-arg NAUTOBOT_VERSION="$NAUTOBOT_VERSION" --build-arg NAUTOBOT_PYTHON_VERSION="$NAUTOBOT_PYTHON_VERSION"
+$ docker-compose build --build-arg NAUTOBOT_VERSION="$NAUTOBOT_VERSION" --build-arg PYTHON_VER="$PYTHON_VER"
 ```
-> Note: `--no-cache` flag can be used to make sure Nautobot image is re-build.
 
 Start Nautobot by using `docker-compose up` command:
 ```
 $ docker-compose up
 ```
 
-At this step you can navigate to Nautobot UI at `localhost:8080` and login with credentials `admin/admin`.
+At this step you can navigate to [Nautobot UI](http://localhost:8080/) and login with credentials `admin/admin`.
 
-After loging into Nautobot you should see two additional plugins installed under `Plugins` section in Nautobot UI:
+After logging into Nautobot you should see list of installed plugins under `Plugins` section in Nautobot UI:
 
 ![Installed Plugins](./images/installed_plugins.png)
 
-## Conclusion
--------------
 
-Plugins are a very powerful feature of the Nautobot because they allow for customization, like new objects in the database, but also having relationships to the core objects like Devices, Interfaces, Circuits or others.
+Also, if you went through previous tutorials, two devices should already be available in the Nautobot.
+
+If that is the case, navigate to one of the devices `view` and you should see additional tab there: `Interfaces Telemetry`
+
+![Device view - interfaces status](./images/interfaces_status.png)
+
+## Conclusion
+
+Plugins are a very powerful feature of the Nautobot which allow for quick and easy customization.
+
+We are going to use our custom plugin in next tutorials to present the `admin/oper` states of the interfaces.

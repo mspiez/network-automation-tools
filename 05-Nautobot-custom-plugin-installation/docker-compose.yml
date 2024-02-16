@@ -1,111 +1,145 @@
 ---
-version: "3.7"
+version: "3.9"
 services:
   nautobot:
-    container_name: nautobot
+    container_name: nautobot_lab
     build:
-      context: ./nautobot
-      dockerfile: "Dockerfile"
+      args:
+        PYTHON_VER: "${PYTHON_VER}"
+      context: ./source
+      dockerfile: docker/Dockerfile
+      target: dev
     image: "nautobot:${NAUTOBOT_VERSION}"
-    env_file:
-      - "./nautobot/local.env"
     ports:
-      - "8443:8443"
       - "8080:8080"
-    restart: "unless-stopped"
     volumes:
-      - "./nautobot/populate_data.py:/opt/nautobot/utils/populate_data.py"
+      - "media_root:/opt/nautobot/media"
+      - "./nautobot/populate_data.py:/source/scripts/populate_data.py"
+      - "./nautobot/nautobot_config.py:/opt/nautobot/nautobot_config.py"
+      - ./source/:/source
     networks:
       - automation_net
-  nautobot-worker:
-    container_name: nautobot_worker
-    build:
-      context: ./nautobot
-      dockerfile: "Dockerfile"
-    image: "nautobot:${NAUTOBOT_VERSION}"
+    depends_on:
+      redis:
+        condition: service_started
+      selenium:
+        condition: service_started
+      db:
+        condition: service_healthy
     env_file:
       - "./nautobot/local.env"
-    entrypoint: "nautobot-server rqworker"
-    depends_on:
-      - "nautobot"
-    restart: "unless-stopped"
-    networks:
-      - automation_net
-  # ----------------------------------
-  # Celery worker must only be used in > 1.1.0 installs. If setting to a previous install, remove this worker
-  # ----------------------------------
+    tty: true
+    healthcheck:
+      interval: 5s
+      timeout: 5s
+      start_period: 5m  # it takes a WHILE to run initial migrations with an empty DB
+      retries: 3
+      test:
+        - "CMD"
+        - "curl"
+        - "-f"
+        - "http://localhost:8080/health/"
   celery_worker:
-    container_name: nautobot_celery_worker
-    build:
-      context: ./nautobot
-      dockerfile: "Dockerfile"
+    container_name: celery_worker_lab
     image: "nautobot:${NAUTOBOT_VERSION}"
-    entrypoint: "sh -c 'nautobot-server celery worker -l $$NAUTOBOT_LOG_LEVEL'"
-    healthcheck:
-      interval: "5s"
-      timeout: "5s"
-      start_period: "5s"
-      retries: 3
-      test: ["CMD", "nautobot-server", "health_check"]
-    depends_on:
-      - "nautobot"
-      - "redis"
-    env_file:
-      - "./nautobot/local.env"
-    tty: true
-    networks:
-      - automation_net
-  # ----------------------------------
-  # Celery beat must only be used in > 1.2.0 installs. If setting to a previous install, remove this worker
-  # ----------------------------------
-  celery_beat:
-    container_name: nautobot_celery_beat
-    build:
-      context: ./nautobot
-      dockerfile: "Dockerfile"
-    image: "nautobot:${NAUTOBOT_VERSION}"
-    entrypoint: "sh -c 'nautobot-server celery beat -l $$NAUTOBOT_LOG_LEVEL'"
-    healthcheck:
-      interval: "5s"
-      timeout: "5s"
-      start_period: "5s"
-      retries: 3
-      test: ["CMD", "nautobot-server", "health_check"]
-    depends_on:
-      - "nautobot"
-      - "redis"
-    env_file:
-      - "./nautobot/local.env"
-    tty: true
-    networks:
-      - automation_net
-  redis:
-    container_name: nautboot_redis
-    image: "redis:alpine"
-    env_file:
-      - "./nautobot/local.env"
-    command:
-      - "sh"
-      - "-c"  # this is to evaluate the $REDIS_PASSWORD from the env
-      - "redis-server --appendonly yes --requirepass $$NAUTOBOT_REDIS_PASSWORD"  ## $$ because of docker-compose
-    restart: "unless-stopped"
-    networks:
-      - automation_net
-  db:
-    container_name: nautboot_db
-    image: "postgres:14"
-    env_file:
-      - "./nautobot/local.env"
-    environment:
-      NAUTOBOT_DB_ENGINE: "django.db.backends.postgres"
+    ports:
+      - "8081:8080"
     volumes:
-      - "db_data:/var/lib/postgresql/data"
-    restart: "unless-stopped"
+      - media_root:/opt/nautobot/media
+      - "./nautobot/nautobot_config.py:/opt/nautobot/nautobot_config.py"
+      - ./source/:/source
     networks:
       - automation_net
-volumes:
-  db_data:
+    entrypoint: "watchmedo auto-restart --directory './' --pattern '*.py' --recursive -- nautobot-server celery worker -l INFO --events"
+    healthcheck:
+      interval: 0s
+      timeout: 30s
+      start_period: 30s
+      retries: 3
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - "nautobot-server celery inspect ping --destination celery@$$HOSTNAME"
+    depends_on:
+      nautobot:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - "./nautobot/local.env"
+    tty: true
+  celery_beat:
+    container_name: celery_beat_lab
+    image: "nautobot:${NAUTOBOT_VERSION}"
+    entrypoint: "nautobot-server celery beat -l INFO"
+    volumes:
+      - "./nautobot/nautobot_config.py:/opt/nautobot/nautobot_config.py"
+      - ./source/:/source
+    networks:
+      - automation_net
+    healthcheck:
+      disable: true
+    depends_on:
+      nautobot:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - "./nautobot/local.env"
+    tty: true
+  redis:
+    container_name: redis_lab
+    image: redis:6-alpine
+    command:
+      - sh
+      - -c # this is to evaluate the $REDIS_PASSWORD from the env
+      - redis-server --appendonly yes --requirepass $$REDIS_PASSWORD ## $$ because of docker-compose
+    networks:
+      - automation_net
+    env_file:
+      - "./nautobot/local.env"
+  selenium:
+    container_name: selenium_lab
+    image: selenium/standalone-firefox:4.9.1
+    ports:
+        - "4444:4444"
+        - "15900:5900"
+    networks:
+      - automation_net
+    shm_size: 2g
+  db:
+    container_name: db_lab
+    image: postgres:13
+    env_file:
+      - "./nautobot/local.env"
+    volumes:
+      - pgdata_nautobot:/var/lib/postgresql/data
+    networks:
+      - automation_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $$POSTGRES_DB -U $$POSTGRES_USER"]
+      interval: 5s
+      timeout: 5s
+      retries: 50
+  mkdocs:
+    container_name: mkdocs_lab
+    profiles:
+      - mkdocs
+    image: "local/nautobot-dev:local-py${PYTHON_VER}"
+    entrypoint: "mkdocs serve -a '0.0.0.0:8001'"
+    networks:
+      - automation_net
+    healthcheck:
+      disable: true
+    tty: true
+    ports:
+      - "8001:8001"
 
 networks:
   automation_net:
     external: true
+
+volumes:
+  pgdata_nautobot:
+  media_root:
