@@ -35,14 +35,14 @@ $ minikube start
 $
 ```
 
->> Note: When `kubectl` is not enabled yet on the system, run the following commands:
+>> Note: When `kubectl` is yet not enabled on the system, run the following commands:
 ```
 $ alias kubectl="minikube kubectl --" >> ~/.profile
 $ . ~/.profile
 
 ```
 
-Test `kubectl` command to get some base info about the node
+Test `kubectl` command to get some base info about the nodes:
 
 ```
 $ kubectl get nodes
@@ -127,6 +127,9 @@ As we have completed installation of all necessary tools, we can proceed with `A
 $ kubectl apply -k ./awx/
 ```
 
+> Note: Please note that it can take few minutes to build containers within minikube.
+
+
 ```
 $ kubectl get pods -n awx
 NAME                                               READY   STATUS    RESTARTS   AGE
@@ -170,7 +173,7 @@ itk2S1NXgHpNV9hWnb4YDmt8f2HK5mjj
 $
 ```
 
-Copy the URL of the `AWX` obtained in the previous step and using any web browser login to the AWX.
+Copy the URL of the `AWX` obtained in the previous step and using any web browser login to the AWX. Make sure to use the password retrieved above.
 
 ![AWX main page](./images/awx_main_page.png)
 
@@ -187,4 +190,4 @@ $
 
 # Conclusion
 
-If you are using Ansible, the `AWX` is great tool for users to run the workflows, log any executions and potentially troubleshoot the issues.
+If you are using Ansible, the `AWX` is great tool for users to run the workflows, log executions or schedule jobs.
