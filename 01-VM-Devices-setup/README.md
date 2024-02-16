@@ -3,11 +3,11 @@
 ## Overview
 -----------
 
-This tutorial describes a quick way to set up VMs on your localhost, so it's possible to test or run Network Automation tools against VM devices.
+This tutorial describes a quick way to set up VMs on your localhost, to be able run Network Automation tools against VM devices.
 
-Guidelines apply to the Ubuntu system, so the commands may differ for you depending on the OS or distribution used. The intention is to build two VMs with one management interface each and connect them to each other with two `Ethernet` interfaces. The management interface is used for accessing devices, adding configuration, getting device state, etc.
+Guidelines apply to the Ubuntu system, so the commands may differ depending on the OS or distribution used. The intention is to build two VMs with one management interface each and connect them to each other with two `Ethernet` interfaces. The management interface is used for accessing devices through SSH, adding configuration, getting device state, etc.
 
-> Please note, that below steps are optional, as there are many ways of setting up VM-s both locally and remotly from your localhost.
+> Please note, that below steps are optional, as there are many ways of setting up VM-s both locally and remotely from your localhost.
 
 Ubuntu version:
 ```
@@ -133,7 +133,7 @@ Login to the devices using `virsh` command:
 virsh console R1
 ```
 
-In a enable mode copy the base config file from `files/configs` directory and paste it adequatly to `R1/R2` - `R1_base.txt` and `R2_base.txt`
+In a enable mode copy the base config file from `files/configs` directory and paste it adequately to `R1/R2` - `R1_base.txt` and `R2_base.txt`
 
 
 Confirm you can ping localhost IP address from devices:
@@ -164,4 +164,4 @@ R1#
 ## Conclusion
 -------------
 
-The topology is very easy to set up, but as always when setting up the tools, keep in mind that steps may (and will) differ depending on the OS or the distribution. The VMs will be used in the next steps of this tutorial series.
+The topology is very easy to set up, but as always keep in mind that steps may (and will) differ depending on the OS or the distribution. The VMs will be important part of the next tutorials.
