@@ -5,13 +5,13 @@ More info about GNMI gateway project can be found [here](https://github.com/open
 In short: `It is a distributed and highly available service for connecting to multiple gNMI targets.`
 
 We will set it up in way to be able to retrieve some basic metrics for the R1 and R2 devices(VM-s setup in previous tutorials).
-Since we are working with a lab setup(VM-s) there will be only handfull of metrics available to us.
+Since we are working with a lab setup(VM-s) there will be only handful of metrics available to us.
 
 First, lets enable GNMI on the devices.
 
 ## GNMI configuration for VM-s
 
-Copy following section to `R1` and `R2` devices. 
+Copy the following section to `R1` and `R2` devices. 
 This part of the configuration is responsible for generating self signed keys and enabling GNMI.
 
 ```
@@ -91,7 +91,7 @@ Build gNMI image using `docker-compose` command:
 ```
 $ docker-compose build
 ```
-> Note: use `--no-cache` flag if you want to re-build the image
+> Note: use `--no-cache` flag if you want to re-build the image and skip using the cached layers.
 
 Next start the `gnmi-gateway` and `prometheus` containers:
 
@@ -114,13 +114,13 @@ Fan Status  Speed  Speed Uptime Stability Uptime
 Since in [targets.json](./gnmi-gateway/targets.json) filtering is not really specified for any particular path, GNMI-gateway grabs metrics like interface packets in/out, cpu or memory utilized by the VM-s.
 
 Before checking metrics we can verify that Prometheus targets are reachable.
-In the web browser naviagate to [Prometheus](http://127.0.0.1:9090/targets?search=)
+In the web browser navigate to [Prometheus](http://127.0.0.1:9090/targets?search=)
 
 At this stage under `Status/Targets` tab you should see following targets:
 
 ![Prometheus targets](./images/prometheus_targets.png)
 
-To check the available metrics navigate to the Prometheus `Graph` section. The ones with prefix `prometheus_` or `go_` comes from premetheus itself and you can see them [here](http://127.0.0.1:9090/metrics) - as long as the Prometheus instance is running.
+To check the available metrics navigate to the Prometheus `Graph` section. The ones with prefix `prometheus_` or `go_` comes from prometheus itself and you can see them [here](http://127.0.0.1:9090/metrics) - as long as the Prometheus instance is running.
 
 All other metrics(without prefix `prometheus_` or `go_`) refers to R1 and R2 devices. Once again, this is just POC/lab so metrics visible in the Prometheus may not be accurate, but still you should see something like:
 
@@ -129,4 +129,4 @@ All other metrics(without prefix `prometheus_` or `go_`) refers to R1 and R2 dev
 
 ## Conclusion
 
-This was POC of device metrics collection into Prometheus using GNMI gateway.
+This was POC of device metrics collection into Prometheus using GNMI gateway. Next, we are going to collect interface states and push it to Nautobot.
