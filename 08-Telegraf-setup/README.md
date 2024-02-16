@@ -32,7 +32,7 @@ In the output you should see device support for multiple SNMP MIB-s.
 
 ## Setup Telegraf and Prometheus
 
-Telegraf collects devices uptime using SNMP protocol and then exposes the metrics through the `metrics` endpoint. Prometheus scraps these metrics, and they can be visible on the graphs.
+Telegraf collects devices uptime using SNMP protocol and then exposes the metrics through the `metrics` endpoint. Prometheus scraps these metrics which can be visualized on the graphs.
 
 Run following command to start Telegraf and Prometheus containers:
 
@@ -62,10 +62,9 @@ snmp,agent_host=192.168.10.2,host=telegraf uptime=255i 1689026970000000000
 ```
 > Note: It can take few mins before metrics are collected
 
-Navigate to [Prometheus](http://127.0.0.1:9090/targets?search=) and meke sure you see Telgraf target in `UP` state.
+Navigate to [Prometheus](http://127.0.0.1:9090/targets?search=) and make sure you see Telegraf target in `UP` state.
 
-Next navigate to [Prometheus](http://127.0.0.1:9090/graph) and search for `snmp_uptime` metric like this:
-
+Next navigate to [Prometheus](http://127.0.0.1:9090/graph) and search for `snmp_uptime` metric from the search bar:
 
 ![SNMP uptime](./images/snmp_uptime.png)
 
@@ -74,5 +73,4 @@ Next navigate to [Prometheus](http://127.0.0.1:9090/graph) and search for `snmp_
 
 ## Conclusion
 
-This was the most basic example using Telegraf, but it is a very sophisticated tool that allows collecting metrics not only from network devices but many other systems.
-
+This was the most basic example of pulling metrics from devices using Telegraf, but keep in mind Telegraf is a very sophisticated tool that allows collecting metrics not only from network devices but also many other systems.
