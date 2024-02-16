@@ -1,21 +1,23 @@
 # Nautobot Network Importer
 
 ## Overview
------------
 
-Network importer operates on top of `device onboarding`. Meaning, devices have to be already present in Nautobot before `network importer` can execute any action. Therefore `onboarding plugin` should first import devices into Nautobot and then, `network importer` can load additional data from the devices, like interfaces, VLAN-s, Prefixes, IP Addresses and sometimes connections(cables in Naubobot) between devices.
+Network importer operates on top of `device onboarding`. Meaning, devices have to be already present in Nautobot before `network importer` can execute any action. Therefore `onboarding plugin` should first import devices into Nautobot and then, `network importer` can load additional data like device interfaces, VLAN-s, Prefixes, IP Addresses and sometimes connections(cables in Nautobot) between devices.
 
-Network Importer is another tool, very usefull in brownfield environments, that pulls data from the network into the SOT.
+Network Importer is another tool, very useful in brownfield environments, that pulls data from the network into the SOT.
+
+Here assumption is that Nautobot is already running and we spin up additional containers just for network importer.
+
+> Note: To support Nautobot `2.1.1` fork of the Network Importer repo was used. Only `create` methods were modified for the purposes of this tutorial. Further updates are required to be able to update or delete objects in Nautobot.
 
 ## Setup
---------
 
 Make sure to setup ENV variables as such:
 ```
 $ export PYTHON_VERSION=3.9
 ```
 
-Next, make sure that `automation_net` is created on the local system:
+Next, make sure that `automation_net` is created on the local system if not already created:
 ```
 $ docker network create --driver bridge automation_net
 ```
@@ -31,16 +33,16 @@ $ docker-compose build --build-arg PYTHON_VERSION=$PYTHON_VERSION
 
 Start `Network Importer` with docker-compose cmd:
 ```
-docker-compose up
+$ docker-compose up
 ```
 
 Once containers are started, login to `network_importer` container and confirm connectivity to Nautobot(inventory):
 
 ```
-docker exec -it network_importer bash
+$ docker exec -it network_importer bash
 ```
 
-Execute following command inside container `network-importer inventory`:
+Execute following command inside `network_importer` container: `network-importer inventory`:
 
 ```
 root@b4a349fbb551:/network-importer# network-importer inventory
@@ -60,26 +62,26 @@ Next, run `network-importer` to import information about interfaces.
 
 The first run have to be executed with `update-configs` flag, to make sure configs are dumped by network-importer, plus lets use `check` mode just to watch what is going to happen, before actually applying any changes into Nautobot:
 ```
-root@54ba06cf3fef:/network-importer# network-importer check --update-configs
-2023-07-04 14:41:32,366 - network-importer - INFO - Updating configuration from devices .. 
-2023-07-04 14:41:32,699 - network-importer - INFO - R2 | Configuration file updated
-2023-07-04 14:41:32,709 - network-importer - INFO - R1 | Configuration file updated
-2023-07-04 14:41:32,710 - network-importer - INFO - Import SOT Model
-2023-07-04 14:41:33,329 - network-importer - INFO - Import Network Model
-2023-07-04 14:41:41,763 - network-importer - INFO - Collecting cabling information from devices .. 
-site
-  site: afghanistan
+root@d44cccad130e:/network-importer# network-importer check --update-configs
+2024-02-16 11:29:31,443 - network-importer - INFO - Updating configuration from devices .. 
+2024-02-16 11:29:31,782 - network-importer - INFO - R1 | Configuration file updated
+2024-02-16 11:29:31,801 - network-importer - INFO - R2 | Latest config file already present ...
+2024-02-16 11:29:31,802 - network-importer - INFO - Import SOT Model
+Nautobot IP Address: R1__Management1__192.168.10.1/24
+Nautobot IP Address Diffsync: R1__Management1__192.168.10.1/24
+Nautobot IP Address: R2__Management1__192.168.10.2/24
+Nautobot IP Address Diffsync: R2__Management1__192.168.10.2/24
+2024-02-16 11:29:35,739 - network-importer - INFO - Import Network Model
+2024-02-16 11:29:45,089 - network-importer - INFO - Collecting cabling information from devices .. 
+location
+  location: 06eb3da9-edc9-4e50-9c6c-d2ec967167ee
     prefix
-      prefix: afghanistan__192.168.10.0/24 MISSING in Nautobot
-      prefix: afghanistan__10.10.10.0/24 MISSING in Nautobot
-      prefix: afghanistan__192.168.1.0/30 MISSING in Nautobot
-      prefix: afghanistan__192.168.1.4/30 MISSING in Nautobot
+      prefix: 06eb3da9-edc9-4e50-9c6c-d2ec967167ee__192.168.10.0/24 MISSING in Nautobot
+      prefix: 06eb3da9-edc9-4e50-9c6c-d2ec967167ee__192.168.1.0/30 MISSING in Nautobot
+      prefix: 06eb3da9-edc9-4e50-9c6c-d2ec967167ee__192.168.1.4/30 MISSING in Nautobot
 device
   device: R1
     interface
-      interface: Management0 MISSING in Nautobot
-        ip_address
-          ip_address: R1__Management0__10.10.10.1/24 MISSING in Nautobot
       interface: Ethernet1 MISSING in Nautobot
         ip_address
           ip_address: R1__Ethernet1__192.168.1.1/30 MISSING in Nautobot
@@ -94,36 +96,40 @@ device
       interface: Ethernet1 MISSING in Nautobot
         ip_address
           ip_address: R2__Ethernet1__192.168.1.2/30 MISSING in Nautobot
-2023-07-04 14:41:41,876 - network-importer - INFO - Execution finished, processed 2 device(s)
-root@54ba06cf3fef:/network-importer#
+2024-02-16 11:29:45,163 - network-importer - INFO - Execution finished, processed 2 device(s)
+root@d44cccad130e:/network-importer#
 ```
 
-Two config files were updated(downloaded) and then whole bunch of info was analyzed. 
+> Note: Depending on the state of network importer, config files may be updated(downloaded) or already present. 
 
 The output clearly shows that objects like interfaces or ip addresses are missing in Nautobot.
 If we now run network-importer in `apply` mode, we should see new objects in Nautobot:
 
 ```
-root@54ba06cf3fef:/network-importer# network-importer apply
-2023-07-04 14:44:46,573 - network-importer - INFO - Import SOT Model
-2023-07-04 14:44:47,693 - network-importer - INFO - Import Network Model
-2023-07-04 14:44:49,942 - network-importer - INFO - Collecting cabling information from devices .. 
-2023-07-04 14:44:50,231 - network-importer - INFO - Created Prefix 192.168.10.0/24 (1f79a32e-5fae-4cd5-be04-e7cc7ec56d57) in Nautobot
-2023-07-04 14:44:50,309 - network-importer - INFO - Created Prefix 10.10.10.0/24 (2822cbdf-f959-4333-8157-17e0c80d237a) in Nautobot
-2023-07-04 14:44:50,405 - network-importer - INFO - Created Prefix 192.168.1.0/30 (32f4761e-2116-44dc-adfd-30d399e5e8e0) in Nautobot
-2023-07-04 14:44:50,505 - network-importer - INFO - Created Prefix 192.168.1.4/30 (32d82f60-3f9a-44e9-95f5-d784b8fa10d6) in Nautobot
-2023-07-04 14:44:50,619 - network-importer - INFO - Created interface Management0 (857b02b0-2173-4e85-91ca-f0faf9738a55) in Nautobot
-2023-07-04 14:44:50,717 - network-importer - INFO - Created IP 10.10.10.1/24 (cf003818-312d-4586-b435-51567d6b1a13) in Nautobot
-2023-07-04 14:44:50,832 - network-importer - INFO - Created interface Ethernet1 (be0a9be9-bf35-4fea-833a-5f34ae9ef1f8) in Nautobot
-2023-07-04 14:44:50,932 - network-importer - INFO - Created IP 192.168.1.1/30 (d4c41920-d9ce-483e-a9eb-f8989631927b) in Nautobot
-2023-07-04 14:44:51,040 - network-importer - INFO - Created interface Ethernet2 (71233012-3573-426d-a2f1-a39fe6743fb5) in Nautobot
-2023-07-04 14:44:51,127 - network-importer - INFO - Created IP 192.168.1.5/30 (b6bb6c7f-14b8-41eb-8c7f-7a9d8d07c3f4) in Nautobot
-2023-07-04 14:44:51,246 - network-importer - INFO - Created interface Ethernet2 (4bf5595c-0cfc-4059-90cc-05e116df9a24) in Nautobot
-2023-07-04 14:44:51,344 - network-importer - INFO - Created IP 192.168.1.6/30 (95d5f335-b7b9-4dea-9b43-7d6785b3b299) in Nautobot
-2023-07-04 14:44:51,453 - network-importer - INFO - Created interface Ethernet1 (1ccb0759-4593-4658-946d-60e4f57fa436) in Nautobot
-2023-07-04 14:44:51,540 - network-importer - INFO - Created IP 192.168.1.2/30 (af6b8e81-a5e1-40ec-83f6-fa88c2a09ad9) in Nautobot
-2023-07-04 14:44:51,540 - network-importer - INFO - Execution finished, processed 2 device(s)
-root@54ba06cf3fef:/network-importer#
+root@d44cccad130e:/network-importer# network-importer apply
+2024-02-16 11:35:08,194 - network-importer - INFO - Import SOT Model
+Nautobot IP Address: R1__Management1__192.168.10.1/24
+Nautobot IP Address Diffsync: R1__Management1__192.168.10.1/24
+Nautobot IP Address: R2__Management1__192.168.10.2/24
+Nautobot IP Address Diffsync: R2__Management1__192.168.10.2/24
+2024-02-16 11:35:11,970 - network-importer - INFO - Import Network Model
+2024-02-16 11:35:14,057 - network-importer - INFO - Collecting cabling information from devices .. 
+2024-02-16 11:35:14,921 - network-importer - INFO - Created Prefix 192.168.1.0/30 (9704c69e-0890-4a3a-b151-3c1babd5ea5e) in Nautobot
+2024-02-16 11:35:15,413 - network-importer - INFO - Created Prefix 192.168.1.4/30 (db3abd96-13b9-4f9d-9688-960943181f24) in Nautobot
+2024-02-16 11:35:16,138 - network-importer - INFO - Created interface Ethernet1 (85085bd6-6fc0-488f-8003-0eed0edb2ee8) in Nautobot
+2024-02-16 11:35:17,689 - network-importer - INFO - Created IP 192.168.1.1/30 (616b7236-9a91-4d5c-a07b-7137c26850f7) in Nautobot
+2024-02-16 11:35:17,689 - network-importer - INFO - IP Address 192.168.1.1/30 (616b7236-9a91-4d5c-a07b-7137c26850f7) assigned to Interface Ethernet1 (85085bd6-6fc0-488f-8003-0eed0edb2ee8)
+2024-02-16 11:35:18,730 - network-importer - INFO - Created interface Ethernet2 (5ee217cb-e280-430f-a79f-c2824015216f) in Nautobot
+2024-02-16 11:35:20,319 - network-importer - INFO - Created IP 192.168.1.5/30 (250a606c-d2e3-4f1b-a345-d029dc625c30) in Nautobot
+2024-02-16 11:35:20,320 - network-importer - INFO - IP Address 192.168.1.5/30 (250a606c-d2e3-4f1b-a345-d029dc625c30) assigned to Interface Ethernet2 (5ee217cb-e280-430f-a79f-c2824015216f)
+2024-02-16 11:35:21,433 - network-importer - INFO - Created interface Ethernet2 (91532668-df12-4c8f-b4c5-a3a99ac20d6d) in Nautobot
+2024-02-16 11:35:23,013 - network-importer - INFO - Created IP 192.168.1.6/30 (b4185f4d-ea1a-4b25-a3e2-c5c0347cb561) in Nautobot
+2024-02-16 11:35:23,014 - network-importer - INFO - IP Address 192.168.1.6/30 (b4185f4d-ea1a-4b25-a3e2-c5c0347cb561) assigned to Interface Ethernet2 (91532668-df12-4c8f-b4c5-a3a99ac20d6d)
+2024-02-16 11:35:24,037 - network-importer - INFO - Created interface Ethernet1 (a31c5ef2-ad1a-4f92-86b9-13918358efbc) in Nautobot
+2024-02-16 11:35:26,141 - network-importer - INFO - Created IP 192.168.1.2/30 (c3546a86-f9cd-472d-ac50-e635ab061125) in Nautobot
+2024-02-16 11:35:26,141 - network-importer - INFO - IP Address 192.168.1.2/30 (c3546a86-f9cd-472d-ac50-e635ab061125) assigned to Interface Ethernet1 (a31c5ef2-ad1a-4f92-86b9-13918358efbc)
+2024-02-16 11:35:26,450 - network-importer - INFO - Execution finished, processed 2 device(s)
+root@d44cccad130e:/network-importer#
 ```
 
 Check Nautobot UI for yourself to confirm data like Prefixes, Interfaces or IP Addresses were successfully imported.
@@ -131,4 +137,4 @@ Check Nautobot UI for yourself to confirm data like Prefixes, Interfaces or IP A
 ## Conclusion
 -------------
 
-Network importer is another tool that saves engineering time by importing devices data into SOT.
+Network importer is another tool that allows importing devices data into SOT.
