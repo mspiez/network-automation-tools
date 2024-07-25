@@ -1,7 +1,6 @@
 # Simple VM-s topology setup
 
 ## Overview
------------
 
 This tutorial describes a quick way to set up VMs on your localhost, to be able run Network Automation tools against VM devices.
 
@@ -17,7 +16,6 @@ $
 ```
 
 ## Setup
---------
 
 ### Install KVM
 ---------------
@@ -162,6 +160,5 @@ R1#
 ```
 
 ## Conclusion
--------------
 
 The topology is very easy to set up, but as always keep in mind that steps may (and will) differ depending on the OS or the distribution. The VMs will be important part of the next tutorials.
