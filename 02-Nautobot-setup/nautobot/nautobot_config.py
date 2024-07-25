@@ -46,7 +46,51 @@ PLUGINS = [
     "nautobot_ssot",
     "nautobot_plugin_nornir",
     "nautobot_golden_config",
+    "nautobot_capacity_metrics",
+    "nautobot_device_lifecycle_mgmt",
 ]
+
+
+PLUGINS_CONFIG = {
+    "nautobot_capacity_metrics": {
+        "enable": True
+    },
+    "nautobot_ssot": {
+        "enable": True
+    },
+    "nautobot_plugin_nornir": {
+        "enable": True
+    },
+    "nautobot_golden_config": {
+        "enable": True
+    },
+    "nautobot_device_lifecycle_mgmt": {
+        "enable": True
+    },
+    "nautobot_device_onboarding": {
+        "create_platform_if_missing": False,
+        "create_manufacturer_if_missing": False,
+        "create_device_type_if_missing": True,
+        "create_device_role_if_missing": True,
+        "create_management_interface_if_missing": True,
+        "default_device_status": "Active",
+        "default_device_role": "unknown",
+        "default_device_role_color": "ff0000",
+        "skip_device_type_on_update": False,
+        "skip_manufacturer_on_update": False,
+        "platform_map": {
+            "cisco_ios": "cisco_ios",
+            "cisco_eos": "cisco_eos",
+        },
+        "onboarding_extensions_map": {
+            "custom_eos": "onboarding_extensions.custom_eos",
+        },
+        "object_match_strategy": "strict",
+        "enable": True,
+    },
+}
+
+
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
 CORS_ALLOW_CREDENTIALS = True

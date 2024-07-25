@@ -28,7 +28,7 @@ print(f"Created manufacturer: Arista")
 
 
 # Create platform
-p = Platform.objects.create(manufacturer=m, name="eos", napalm_driver="eos", network_driver="arista_eos")
+p = Platform.objects.create(manufacturer=m, name="arista_eos", napalm_driver="eos", network_driver="arista_eos")
 p.validated_save()
 print(f"Created platform: Arista")
 

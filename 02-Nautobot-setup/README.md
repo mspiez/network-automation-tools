@@ -4,45 +4,72 @@
 
 This tutorial describes a quick way of setting up Nautobot on the local system.
 
-After spinning up containers, the Nautobot database will be filled with some basic data, so that it does not have to be handled manually. 
+After spinning up Nautobot containers, the database will be filled with some generic data, like credentials, so that user does not have to add it manually. 
 
 
 ## Setup Nautobot
 
-The version of the Nautobot to be used: `2.1.1`.
-
-Clone nautobot repo into the `source` directory and then copy poetry dependency files adequately:
-
-```
-$ git clone https://github.com/nautobot/nautobot.git --branch v2.1.1 source
-$ cp nautobot/pyproject.toml nautobot/poetry.lock ./source
-```
-
-Make sure to setup ENV variables as such:
-```
-$ export NAUTOBOT_VERSION=2.1.1
-$ export PYTHON_VER=3.9
-```
-
-These ones are used by `docker-compose` when building Nautobot image on the local system.
+The version of the Nautobot to be used: `2.2.7` and python `3.9`
 
 Before starting Nautobot, create Docker network that containers will be using to communicate with each other:
 ```
 $ docker network create --driver bridge automation_net
 ```
 
-Now, docker images have to be build with `docker-compose build` command and some arguments:
-
+Make sure to install `invoke` on your local system and setup python version to 3.9:
 ```
-$ docker-compose build --build-arg NAUTOBOT_VERSION="$NAUTOBOT_VERSION" --build-arg PYTHON_VER="$PYTHON_VER"
-```
-
-Start Nautobot by using `docker-compose up` command:
-```
-$ docker-compose up
+$ pip install invoke==2.2.0
+$ export PYTHON_VER=3.9
 ```
 
-At this step you can navigate to [Nautobot UI](http://localhost:8080/) and login with credentials `admin/admin`. There is no any data in Nautobot so far, so let's populate some data into Nautobot.
+Now, docker images have to be build with `docker-compose build` but we can take advantage of `tasks.py` and run `invoke build`:
+
+```
+$ invoke build
+Building Nautobot with Python 3.9...
+Running docker compose command "build"
+redis uses an image, skipping
+selenium uses an image, skipping
+db uses an image, skipping
+celery_beat uses an image, skipping
+celery_worker uses an image, skipping
+Building nautobot
+#2 [internal] load build definition from Dockerfile
+#2 sha256:7278356e40f728c6282b8018e4afb12601a906d00c6574fa90d3bf6eff024c57
+#2 transferring dockerfile: 997B done
+#2 DONE 0.0s
+
+#1 [internal] load .dockerignore
+#1 sha256:4af1373924805dbe623198cd0b7e22555f2c5f32ea4970c0dfadc4f539b212ca
+#1 transferring context: 2B done
+#1 DONE 0.0s
+
+#3 [internal] load metadata for ghcr.io/nautobot/nautobot-dev:2.2.7-py3.11
+#3 sha256:c656460b0c17c61b03e1e7b00d4541daa593ea14b6291fceaaf23deaffe90605
+#3 DONE 0.8s
+
+#12 [base 1/5] FROM ghcr.io/nautobot/nautobot-dev:2.2.7-py3.11@sha256:1a93f873b672146cd526d3d9772d5ed2b113818e9b9f33d898f856522ad0b62e
+#12 sha256:902149c9fad999e3035f48015c069ed7507623143f9dba9b5e8abfe1d7b6d6a2
+#12 DONE 0.0s
+
+#10 [internal] load build context
+#10 sha256:a1de697bd746d9e9b374f64c45a81188ad4b59d73f0b6bead7164977336f27f6
+#10 transferring context: 676B done
+#10 DONE 0.0s
+
+...
+<skipped>
+
+```
+
+`invoke` command helps us manage local Nautobot instance. We can build image, start or stop instance and so on.
+
+Once image was successfully build, Nautobot can be started using following command:
+```
+$ invoke start
+```
+
+At this step, after successful start, you can navigate to [Nautobot UI](http://localhost:8080/) and login with credentials `admin/admin`. There is no any data in Nautobot so far, so let's populate some data into Nautobot database.
 
 ### Pre-populate data into Nautobot
 ----------------------------------
@@ -54,10 +81,10 @@ This step generates:
 - platform
 - secrets
 
-Enter the Nautobot shell inside container: `docker exec -it nautobot_lab nautobot-server nbshell`
+Enter the Nautobot shell inside container: `invoke nbshell`
 
 ```
-$ docker exec -it nautobot_lab nautobot-server nbshell
+$ invoke nbshell
 # Shell Plus Model Imports
 from constance.backends.database.models import Constance
 from django.contrib.admin.models import LogEntry
@@ -110,7 +137,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 
 ```
 
-Onced in Python/nbshell shell, execute following command `exec(open('/source/scripts/populate_data.py').read())`:
+Once in Python/nbshell shell, execute following command `exec(open('/source/scripts/populate_data.py').read())`:
 ```
 >>> 
 >>> exec(open('/source/scripts/populate_data.py').read())
@@ -129,4 +156,4 @@ Created platform: Arista
 
 ## Conclusion
 
-At this stage Nautobot is able to communicate with our VMs and gather some basic information about them. Next let's look at the details of `device onboarding` app in Nautobot, but now you can already explore Nautobot UI from the browser.
+At this stage Nautobot is up and running, but also is able to communicate with our VMs. In the next part let's look at the details of `device onboarding` app in Nautobot, but before that you can explore Nautobot UI from the browser.
