@@ -19,7 +19,7 @@ Perform new onboarding task by clicking on the blue `run` button and filling in 
 ![New Onboarding task](./images/onboarding_form.png)
 
 Required parameters to be used:
-- Site: I have picked first from the list(does not really matter here)
+- Site: I have picked the first from the list(does not really which one you choose)
 - IP Address: `192.168.10.1` mgmt interface/IP address for device that we plan to onboard
 - Port: `443` because we are using Arista VM-s connecting through eAPI
 - Secrets: `ARISTA_DEVICES` secrets to be used when connecting to VM-s
@@ -36,6 +36,8 @@ Repeat the same steps for R2 with IP Address `192.168.10.2` by clicking on `re-r
 Once completed, you should see two devices available in the Nautobot together with associated mgmt interfaces, ip addresses and prefix:
 
 ![Onboarding devices](./images/onboarding_devices.png)
+
+By default onboarding app setups `unknown` device role taken from default settings, but it's very easy to modify this behavior by adding extension that implements custom logic and sets some other device role. This is very convenient and dynamic way of setting up device attributes during onboarding.  
 
 
 ## Conclusion
