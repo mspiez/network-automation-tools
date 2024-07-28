@@ -14,8 +14,7 @@ services:
     depends_on:
       - "batfish"
     volumes:
-      - "../../network-importer-fork/network_importer/:/usr/local/lib/python3.9/site-packages/network_importer/"
-    
+      - "./network_importer/network_importer.toml:/local/network_importer.toml"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

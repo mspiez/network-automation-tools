@@ -1,10 +1,17 @@
-ARG PYTHON_VERSION
+ARG PYTHON_VER="3.9"
 
-FROM python:${PYTHON_VERSION}
+FROM python:${PYTHON_VER}
 
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip \
+  && pip install poetry==1.8.3
 
-RUN git clone https://github.com/mspiez/network-importer.git
-WORKDIR /network-importer
+WORKDIR /local
+RUN git clone https://github.com/mspiez/network-importer.git .
 
-RUN pip install .
+COPY pyproject.toml poetry.lock /local/
+
+RUN poetry config virtualenvs.create false \
+  && poetry install --no-interaction --no-ansi --no-root
+
+RUN poetry install --no-ansi --no-interaction
+

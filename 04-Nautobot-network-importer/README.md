@@ -8,13 +8,13 @@ Network Importer is another tool, very useful in brownfield environments, that p
 
 Here assumption is that Nautobot is already running and we spin up additional containers just for network importer.
 
-> Note: To support Nautobot `2.1.1` fork of the Network Importer repo was used. Only `create` methods were modified for the purposes of this tutorial. Further updates are required to be able to update or delete objects in Nautobot.
+> Note: To support Nautobot `2.2.7` fork of the Network Importer repo was used. Only `create` methods were modified for the purposes of this tutorial. Further updates are required to be able to update or delete objects in Nautobot.
 
 ## Setup
 
 Make sure to setup ENV variables as such:
 ```
-$ export PYTHON_VERSION=3.9
+$ export PYTHON_VER=3.9.19
 ```
 
 Next, make sure that `automation_net` is created on the local system if not already created:
@@ -28,7 +28,7 @@ Now, docker images have to be build with `docker-compose build` command and argu
 Build docker containers with the following command:
 
 ```
-$ docker-compose build --build-arg PYTHON_VERSION=$PYTHON_VERSION
+$ docker-compose build --build-arg PYTHON_VER=$PYTHON_VER
 ```
 
 Start `Network Importer` with docker-compose cmd:
@@ -45,15 +45,14 @@ $ docker exec -it network_importer bash
 Execute following command inside `network_importer` container: `network-importer inventory`:
 
 ```
-root@b4a349fbb551:/network-importer# network-importer inventory
-                       Device Inventory (limit:False)                        
-┏━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━┓
-┃ Device ┃ Platform ┃ Driver                           ┃ Reachable ┃ Reason ┃
-┡━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━┩
-│ R1     │ eos      │ network_importer.drivers.default │ True      │        │
-│ R2     │ eos      │ network_importer.drivers.default │ True      │        │
-└────────┴──────────┴──────────────────────────────────┴───────────┴────────┘
-root@b4a349fbb551:/network-importer
+root@e578fb1e25d2:/local# network-importer inventory                        
+┏━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━┓
+┃ Device ┃ Platform   ┃ Driver                              ┃ Reachable ┃ Reason ┃
+┡━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━┩
+│ R1     │ arista_eos │ network_importer.drivers.arista_eos │ True      │        │
+│ R2     │ arista_eos │ network_importer.drivers.arista_eos │ True      │        │
+└────────┴────────────┴─────────────────────────────────────┴───────────┴────────┘
+root@e578fb1e25d2:/local# 
 
 ```
 > Note: You will only see similar output as soon as R1 and R2 devices were properly imported into Nautobot according to the guidelines in Nautobot Devices Onboarding plugin tutorial.
@@ -62,7 +61,7 @@ Next, run `network-importer` to import information about interfaces.
 
 The first run have to be executed with `update-configs` flag, to make sure configs are dumped by network-importer, plus lets use `check` mode just to watch what is going to happen, before actually applying any changes into Nautobot:
 ```
-root@d44cccad130e:/network-importer# network-importer check --update-configs
+root@e578fb1e25d2:/local# network-importer check --update-configs
 2024-02-16 11:29:31,443 - network-importer - INFO - Updating configuration from devices .. 
 2024-02-16 11:29:31,782 - network-importer - INFO - R1 | Configuration file updated
 2024-02-16 11:29:31,801 - network-importer - INFO - R2 | Latest config file already present ...
@@ -97,7 +96,7 @@ device
         ip_address
           ip_address: R2__Ethernet1__192.168.1.2/30 MISSING in Nautobot
 2024-02-16 11:29:45,163 - network-importer - INFO - Execution finished, processed 2 device(s)
-root@d44cccad130e:/network-importer#
+root@e578fb1e25d2:/local# 
 ```
 
 > Note: Depending on the state of network importer, config files may be updated(downloaded) or already present. 
@@ -106,7 +105,7 @@ The output clearly shows that objects like interfaces or ip addresses are missin
 If we now run network-importer in `apply` mode, we should see new objects in Nautobot:
 
 ```
-root@d44cccad130e:/network-importer# network-importer apply
+root@e578fb1e25d2:/local# network-importer apply
 2024-02-16 11:35:08,194 - network-importer - INFO - Import SOT Model
 Nautobot IP Address: R1__Management1__192.168.10.1/24
 Nautobot IP Address Diffsync: R1__Management1__192.168.10.1/24
@@ -129,7 +128,7 @@ Nautobot IP Address Diffsync: R2__Management1__192.168.10.2/24
 2024-02-16 11:35:26,141 - network-importer - INFO - Created IP 192.168.1.2/30 (c3546a86-f9cd-472d-ac50-e635ab061125) in Nautobot
 2024-02-16 11:35:26,141 - network-importer - INFO - IP Address 192.168.1.2/30 (c3546a86-f9cd-472d-ac50-e635ab061125) assigned to Interface Ethernet1 (a31c5ef2-ad1a-4f92-86b9-13918358efbc)
 2024-02-16 11:35:26,450 - network-importer - INFO - Execution finished, processed 2 device(s)
-root@d44cccad130e:/network-importer#
+root@e578fb1e25d2:/local# 
 ```
 
 Check Nautobot UI for yourself to confirm data like Prefixes, Interfaces or IP Addresses were successfully imported.

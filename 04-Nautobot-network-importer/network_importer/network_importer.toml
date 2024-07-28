@@ -21,7 +21,7 @@ backend = "nautobot"            # Valid options are ["nautobot", "netbox"]
 [inventory]
 # Define a list of supported platform, 
 # if defined all devices without platform or with a different platforms will be removed from the inventory
-# supported_platforms = [ "cisco_ios", "cisco_nxos" ]
+# supported_platforms = [ "cisco_ios", "cisco_nxos", "arista_eos", "custom_eos"]
 
 [inventory.settings]
 # The information to connect to Nautobot needs to be provided, either in the config file or as environment variables
