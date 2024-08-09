@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: eu1
+    replica: 0
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus:9090']
+
+  - job_name: 'telegraf'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['telegraf:9126']
+
+  - job_name: 'alertmanager'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+
+alerting:
+  alertmanagers:
+    - scheme: http
+      static_configs:
+        - targets: [ 'alertmanager:9093' ]
+
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+

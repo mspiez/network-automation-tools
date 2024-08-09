@@ -1,0 +1,42 @@
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: "email-notification"
+  routes:
+  - receiver: "email-notification"
+    matchers:
+    - alertname=~"device_down"
+    group_by: [ device ]
+    group_interval: 1m
+    group_wait: 2m
+    repeat_interval: 24h
+  - receiver: "email-notification"
+    matchers:
+    - alertname=~"interface_down"
+    group_by: [ device ]
+    group_interval: 1m
+    group_wait: 2m
+    repeat_interval: 24h
+
+receivers:
+- name: "email-notification"
+  email_configs:
+  - to: "mspiez@gmail.com"
+    smarthost: 'smtp.gmail.com:465'
+    auth_username: 'mspiez@gmail.com'
+    auth_password: ""
+    from: 'mspiez@gmail.com'
+    send_resolved: true
+    require_tls: false
+    text: >-
+      {{ range .Alerts -}}
+      *Alert:* {{ .Annotations.title }}
+
+      *Description:* {{ .Description.title }}
+
+      *Details:*
+        {{ range .Labels.SortedPairs }} - *{{ .Name }}:* `{{ .Value }}`
+        {{ end }}
+      {{ end }}
+
