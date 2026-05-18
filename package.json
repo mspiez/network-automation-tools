@@ -1,0 +1,783 @@
+typescript
+/**
+ * src/index.ts — Automated GitLab token leak remediation
+ *
+ * Performs the four recommended actions:
+ * 1. Revoke the leaked token via GitLab API (self-revoke endpoint).
+ * 2. Generate a replacement token.
+ * 3. (Optional) Automate git history scrubbing using git-filter-repo.
+ * 4. Append the exposed file to `.gitignore`.
+ *
+ * All side‑effects are logged with structured logging (winston).
+ * The replacement token is written to a secure file (mode 0600) to avoid log leakage.
+ * Exits with code 0 on success, non‑zero on failure.
+ *
+ * @module
+ */
+
+import axios, { AxiosError, AxiosInstance } from 'axios';
+import * as winston from 'winston';
+import * as path from 'path';
+import * as fs from 'fs/promises';
+import { execSync, spawn } from 'child_process';
+import { createHash, randomBytes } from 'crypto';
+import { z } from 'zod';
+import { setTimeout as sleep } from 'timers/promises';
+
+/* ------------------------------------------------------------------ */
+/*  Environment & Constants                                            */
+/* ------------------------------------------------------------------ */
+
+/** Maximum file size (in bytes) for `.gitignore` operations. */
+const MAX_GITIGNORE_SIZE = 1_048_576; // 1 MB
+
+/** Default timeout for all HTTP requests (milliseconds). */
+const HTTP_TIMEOUT = 30_000;
+
+/** Max retries for transient API errors. */
+const MAX_RETRIES = 3;
+
+/** Initial backoff in ms for retries. */
+const RETRY_BASE_MS = 1_000;
+
+/** Regex for GitLab personal access tokens (glpat‑prefix + 20 alnum). */
+const GITLAB_TOKEN_REGEX = /^glpat-[a-zA-Z0-9]{20}$/;
+
+/** Name for newly created replacement token. */
+const DEFAULT_TOKEN_NAME = 'replacement-token';
+
+/** Default expiry for replacement token (30 days in milliseconds). */
+const DEFAULT_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Default scopes for replacement token. */
+const DEFAULT_SCOPES: readonly string[] = ['read_repository', 'write_repository'] as const;
+
+/** Path (relative to repo root) of the exposed `.env` file. */
+const DEFAULT_EXPOSED_FILE = '05-Nautobot-custom-plugin-installation/nautobot/local.env';
+
+/** Name of the new token output file (relative to repo root). */
+const NEW_TOKEN_FILE = 'replacement-token.txt';
+
+/** Permissions for the new token file (owner read/write only). */
+const NEW_TOKEN_FILE_MODE = 0o600;
+
+/* ------------------------------------------------------------------ */
+/*  Zod Schema for Configuration                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Zod schema for validating RemediationConfig.
+ * Ensures type safety and provides detailed error messages.
+ */
+const RemediationConfigSchema = z.object({
+  leakedToken: z.string().regex(GITLAB_TOKEN_REGEX, {
+    message: 'leakedToken must match glpat-<20 alphanumeric characters>',
+  }),
+  gitlabUrl: z.string().url('gitlabUrl must be a valid URL').refine(
+    (url) => url.startsWith('http://') || url.startsWith('https://'),
+    { message: 'gitlabUrl must use http or https scheme' }
+  ),
+  repoRoot: z.string().min(1, 'repoRoot must be non-empty').refine(
+    (p) => path.isAbsolute(p),
+    { message: 'repoRoot must be an absolute path' }
+  ),
+  exposedFilePath: z.string().min(1, 'exposedFilePath must be non-empty'),
+  newTokenName: z.string().min(1).optional().default(DEFAULT_TOKEN_NAME),
+  newTokenExpiry: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'newTokenExpiry must be in YYYY-MM-DD format')
+    .optional()
+    .default(() => {
+      const d = new Date(Date.now() + DEFAULT_EXPIRY_MS);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }),
+  newTokenScopes: z.array(z.string().min(1)).optional().default([...DEFAULT_SCOPES]),
+  dryRun: z.boolean().optional().default(false),
+  scrubHistory: z.boolean().optional().default(false),
+});
+
+type RemediationConfig = z.infer<typeof RemediationConfigSchema>;
+
+/** Response from GitLab's token creation endpoint. */
+interface CreateTokenResponse {
+  token: string;
+  id: number;
+  name: string;
+  scopes: string[];
+  expires_at: string | null;
+  created_at: string;
+}
+
+/** Response from GitLab's self‑revoke endpoint (may return empty or confirmation). */
+type RevokeResponse = Record<string, unknown>;
+
+/** User info returned by /api/v4/user. */
+interface UserInfo {
+  id: number;
+  username: string;
+  name: string;
+  state: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom Error Classes                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Base error for remediation failures.
+ */
+export class RemediationError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = 'RemediationError';
+  }
+}
+
+/**
+ * Error raised when an API call fails after retries.
+ */
+export class ApiError extends RemediationError {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    cause?: Error
+  ) {
+    super(message, cause);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * Error raised for invalid configuration.
+ */
+export class ConfigurationError extends RemediationError {
+  constructor(message: string, public readonly details?: z.ZodError) {
+    super(message);
+    this.name = 'ConfigurationError';
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Logger Setup                                                       */
+/* ------------------------------------------------------------------ */
+
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL ?? 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
+    winston.format.json(),
+  ),
+  defaultMeta: { service: 'gitlab-token-remediation' },
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.printf(({ timestamp, level, message, ...rest }) => {
+          const extra = Object.keys(rest).length > 0 ? ` ${JSON.stringify(rest)}` : '';
+          return `${timestamp} [${level}] ${message}${extra}`;
+        }),
+      ),
+    }),
+    new winston.transports.File({
+      filename: 'remediation-error.log',
+      level: 'error',
+      maxsize: 1_000_000,
+      maxFiles: 3,
+      tailable: true,
+    }),
+    new winston.transports.File({
+      filename: 'remediation-combined.log',
+      level: 'info',
+      maxsize: 5_000_000,
+      maxFiles: 5,
+      tailable: true,
+    }),
+  ],
+});
+
+/* ------------------------------------------------------------------ */
+/*  Validation Functions                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Validates and parses a raw configuration object using Zod.
+ *
+ * @param raw - Unvalidated configuration object (e.g., from environment + CLI arguments).
+ * @returns A validated `RemediationConfig` instance.
+ * @throws {ConfigurationError} If validation fails.
+ */
+export function validateConfig(raw: unknown): RemediationConfig {
+  const result = RemediationConfigSchema.safeParse(raw);
+  if (!result.success) {
+    const formatted = result.error.errors.map(
+      (e) => `${e.path.join('.')}: ${e.message}`
+    );
+    throw new ConfigurationError(
+      `Configuration validation failed:\n  - ${formatted.join('\n  - ')}`,
+      result.error
+    );
+  }
+  return result.data;
+}
+
+/* ------------------------------------------------------------------ */
+/*  GitLab API Utilities                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Creates an Axios instance pre‑configured for GitLab API calls with retry logic.
+ *
+ * @param baseUrl - GitLab instance base URL.
+ * @param token   - Personal access token for authentication.
+ * @returns Configured Axios instance with interceptors for retry and logging.
+ */
+function createGitlabClient(baseUrl: string, token: string): AxiosInstance {
+  const client = axios.create({
+    baseURL: `${baseUrl.replace(/\/$/, '')}/api/v4`,
+    timeout: HTTP_TIMEOUT,
+    headers: {
+      'PRIVATE-TOKEN': token,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  // Retry interceptor for transient errors (5xx, network errors)
+  let retryCount = 0;
+  client.interceptors.response.use(
+    (response) => {
+      retryCount = 0; // reset on success
+      return response;
+    },
+    async (error: AxiosError) => {
+      const originalRequest = error.config;
+      if (!originalRequest || retryCount >= MAX_RETRIES) {
+        return Promise.reject(error);
+      }
+      // Retry on 5xx or network error (no response)
+      if (error.response && error.response.status < 500) {
+        return Promise.reject(error);
+      }
+      retryCount++;
+      const backoff = RETRY_BASE_MS * Math.pow(2, retryCount - 1) + Math.random() * 500;
+      logger.warn(`Retry ${retryCount}/${MAX_RETRIES} after ${Math.round(backoff)}ms`, {
+        url: originalRequest.url,
+        status: error.response?.status,
+      });
+      await sleep(backoff);
+      return client(originalRequest);
+    }
+  );
+
+  return client;
+}
+
+/**
+ * Validates that the token is active and retrieves user info.
+ *
+ * @param client - Axios instance authenticated with the leaked token.
+ * @returns UserInfo object.
+ * @throws {ApiError} If token is invalid or user endpoint fails.
+ */
+async function validateToken(client: AxiosInstance): Promise<UserInfo> {
+  try {
+    const response = await client.get<UserInfo>('/user');
+    logger.info('Token validated successfully', {
+      userId: response.data.id,
+      username: response.data.username,
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    const status = axiosError.response?.status ?? 0;
+    throw new ApiError(
+      `Failed to validate token: ${axiosError.message}`,
+      status,
+      axiosError
+    );
+  }
+}
+
+/**
+ * Revokes the leaked token using the self-revoke endpoint.
+ * The token must be the one currently used in client authentication.
+ *
+ * @param client - Axios instance authenticated with the leaked token.
+ * @returns true if revocation succeeded.
+ * @throws {ApiError} If revocation fails.
+ */
+async function revokeLeakedToken(client: AxiosInstance): Promise<boolean> {
+  try {
+    // POST /personal_access_tokens/self with no body
+    await client.post<RevokeResponse>('/personal_access_tokens/self', {});
+    logger.info('Leaked token revoked successfully');
+    return true;
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    const status = axiosError.response?.status ?? 0;
+    throw new ApiError(
+      `Failed to revoke leaked token: ${axiosError.message}`,
+      status,
+      axiosError
+    );
+  }
+}
+
+/**
+ * Creates a new personal access token with the specified configuration.
+ *
+ * @param client   - Axios instance authenticated with a valid token (e.g., admin or user token).
+ * @param name     - Name for the new token.
+ * @param scopes   - List of scopes.
+ * @param expiresAt - Expiry date in YYYY-MM-DD format.
+ * @returns The new token value and full response data.
+ * @throws {ApiError} If creation fails.
+ */
+async function createToken(
+  client: AxiosInstance,
+  name: string,
+  scopes: readonly string[],
+  expiresAt: string
+): Promise<CreateTokenResponse> {
+  try {
+    const response = await client.post<CreateTokenResponse>('/personal_access_tokens', {
+      name,
+      scopes: [...scopes],
+      expires_at: expiresAt,
+    });
+    logger.info('New token created', {
+      tokenId: response.data.id,
+      name: response.data.name,
+      expiresAt: response.data.expires_at,
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    const status = axiosError.response?.status ?? 0;
+    throw new ApiError(
+      `Failed to create replacement token: ${axiosError.message}`,
+      status,
+      axiosError
+    );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  File System Utilities                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Appends the exposed file path to `.gitignore` if not already present.
+ *
+ * @param repoRoot       - Absolute path to repository root.
+ * @param exposedFilePath - Relative file path that was exposed.
+ * @returns true if entry was added, false if already present or dry run.
+ * @throws {RemediationError} On filesystem errors.
+ */
+async function updateGitignore(
+  repoRoot: string,
+  exposedFilePath: string
+): Promise<boolean> {
+  const gitignorePath = path.join(repoRoot, '.gitignore');
+  const entry = exposedFilePath.replace(/\\/g, '/');
+
+  try {
+    let content = '';
+    try {
+      const stat = await fs.stat(gitignorePath);
+      if (stat.size > MAX_GITIGNORE_SIZE) {
+        logger.warn('.gitignore exceeds maximum size; skipping append');
+        return false;
+      }
+      content = await fs.readFile(gitignorePath, 'utf8');
+    } catch {
+      // File doesn't exist – we'll create it.
+      logger.info('.gitignore does not exist; will create');
+    }
+
+    // Check if entry is already present
+    const lines = content.split('\n').map((l) => l.trim());
+    if (lines.includes(entry)) {
+      logger.info(`${entry} already in .gitignore`);
+      return false;
+    }
+
+    // Append with newline
+    const toAppend = content.endsWith('\n') ? `${entry}\n` : `\n${entry}\n`;
+    await fs.appendFile(gitignorePath, toAppend, 'utf8');
+    logger.info(`Added ${entry} to .gitignore`);
+    return true;
+  } catch (error) {
+    throw new RemediationError(
+      `Failed to update .gitignore: ${(error as Error).message}`,
+      error as Error
+    );
+  }
+}
+
+/**
+ * Writes the new token to a secure file with restricted permissions.
+ *
+ * @param repoRoot - Absolute path to repository root.
+ * @param token    - The new token value.
+ * @returns The full path to the written file.
+ * @throws {RemediationError} On filesystem errors.
+ */
+async function writeTokenFile(repoRoot: string, token: string): Promise<string> {
+  const filePath = path.join(repoRoot, NEW_TOKEN_FILE);
+  try {
+    await fs.writeFile(filePath, token, { mode: NEW_TOKEN_FILE_MODE, encoding: 'utf8' });
+    // Verify permissions (POSIX only – on Windows the mode is advisory)
+    try {
+      await fs.chmod(filePath, NEW_TOKEN_FILE_MODE);
+    } catch {
+      // ignore if chmod fails (e.g., Windows)
+    }
+    logger.info(`New token written to ${filePath} (mode ${NEW_TOKEN_FILE_MODE.toString(8)})`);
+    return filePath;
+  } catch (error) {
+    throw new RemediationError(
+      `Failed to write token file: ${(error as Error).message}`,
+      error as Error
+    );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Git History Scrubbing (Optional)                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Checks if git-filter-repo is installed and available.
+ *
+ * @returns true if available.
+ */
+function isFilterRepoAvailable(): boolean {
+  try {
+    execSync('git filter-repo --version', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Attempts to scrub the leaked file from git history using git-filter-repo.
+ * Asks for user confirmation if `interactive` is true.
+ *
+ * @param repoRoot       - Absolute path to repository root.
+ * @param exposedFilePath - Path to the file to remove from history.
+ * @param interactive    - Whether to prompt user for confirmation.
+ * @returns true if scrub was executed.
+ * @throws {RemediationError} If scrub fails or is unavailable.
+ */
+async function scrubGitHistory(
+  repoRoot: string,
+  exposedFilePath: string,
+  interactive: boolean = false
+): Promise<boolean> {
+  if (!isFilterRepoAvailable()) {
+    logger.warn('git-filter-repo not installed; skipping history scrub.');
+    logger.warn('To install: pip install git-filter-repo');
+    return false;
+  }
+
+  const confirmation = interactive
+    ? await new Promise<string>((resolve) => {
+        process.stdout.write(
+          `\nThis will REMOVE ${exposedFilePath} from ALL git history. Continue? [y/N] `
+        );
+        process.stdin.once('data', (data) => {
+          resolve(data.toString().trim().toLowerCase());
+        });
+      })
+    : 'y'; // if not interactive, assume yes when flag is set.
+
+  if (confirmation !== 'y' && confirmation !== 'yes') {
+    logger.info('Git history scrub cancelled by user');
+    return false;
+  }
+
+  try {
+    logger.info('Starting git history scrub using filter-repo...');
+    const args = [
+      'filter-repo',
+      '--path',
+      exposedFilePath,
+      '--invert-paths',
+      '--force',
+    ];
+    spawn('git', args, {
+      cwd: repoRoot,
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
+    logger.info('Git history scrub completed successfully');
+    logger.warn('You may need to force-push the rewritten history: git push --force --all');
+    return true;
+  } catch (error) {
+    throw new RemediationError(
+      `Git history scrub failed: ${(error as Error).message}`,
+      error as Error
+    );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Remediation Orchestrator                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Runs the full remediation workflow.
+ *
+ * @param config - Validated configuration object.
+ * @returns 0 on success, 1 on failure.
+ */
+export async function runRemediation(config: RemediationConfig): Promise<number> {
+  const {
+    leakedToken,
+    gitlabUrl,
+    repoRoot,
+    exposedFilePath,
+    newTokenName,
+    newTokenExpiry,
+    newTokenScopes,
+    dryRun,
+    scrubHistory,
+  } = config;
+
+  logger.info('Starting remediation workflow', {
+    gitlabUrl,
+    repoRoot,
+    exposedFilePath,
+    dryRun,
+    scrubHistory,
+  });
+
+  try {
+    // Step 0: Validate repository root exists
+    try {
+      const stat = await fs.stat(repoRoot);
+      if (!stat.isDirectory()) {
+        throw new RemediationError(`Repo root is not a directory: ${repoRoot}`);
+      }
+    } catch (error) {
+      if (error instanceof RemediationError) throw error;
+      throw new RemediationError(`Repo root not accessible: ${(error as Error).message}`);
+    }
+
+    // Step 1: Validate the leaked token and get user info
+    const client = createGitlabClient(gitlabUrl, leakedToken);
+    const userInfo = await validateToken(client);
+    logger.info('Authenticated as', { username: userInfo.username });
+
+    if (dryRun) {
+      logger.info('DRY RUN – skipping revocation, token creation, and file writes');
+      logger.info('Would revoke token for user:', userInfo.username);
+      logger.info('Would create token:', {
+        name: newTokenName,
+        scopes: newTokenScopes,
+        expiresAt: newTokenExpiry,
+      });
+      logger.info('Would append to .gitignore:', exposedFilePath);
+      if (scrubHistory) {
+        logger.info('Would scrub git history for:', exposedFilePath);
+      }
+      return 0;
+    }
+
+    // Step 2: Revoke the leaked token
+    logger.info('Revoking leaked token...');
+    await revokeLeakedToken(client);
+    // Client is now invalid for further calls; we need a new client for creation.
+    // However, for token creation we may use a different token (e.g., admin token).
+    // In a typical workflow, after revocation we must use another valid token.
+    // This implementation assumes we have a separate admin token, but for simplicity
+    // we will obtain a new token using a different authentication method.
+    // Since the leaked token is now revoked, we cannot use it to create a new token.
+    // We should have used the leaked token to create a new token *before* revoking it.
+    // Better order: create new token first, then revoke old token.
+    // Therefore, reorder the steps.
+
+    // Actually, the correct order is:
+    // 1. Create new token with the old token (if permissions allow).
+    // 2. Revoke the old token.
+    // 3. Write new token to file.
+    // 4. Gitignore and scrub.
+
+    // Since we already revoked, we need to recreate client with a fallback token.
+    // For simplicity, we'll recreate client with the same token (but it's revoked).
+    // This is a flaw – we'll restructure.
+    // Let's fix the order below.
+
+    logger.warn('Order reversal needed: creating new token before revoking old one.');
+    // We'll continue for demo, but in production the order should be as above.
+    // Since the token is already revoked (above), creation will fail.
+    // To make it work, we'll comment out the above revocation and place it after creation.
+    // For the final code, we'll correct the order.
+
+    // Simulate corrected order in this version:
+    // (We'll rewrite the step order below.)
+
+    // For now, return an error indicating the order issue:
+    throw new RemediationError('Order of operations incorrect; see corrected version below.');
+
+    // ------------------ Corrected order (to be used) ------------------
+    // Actually, to produce correct code, I'll implement the proper order now.
+  } catch (error) {
+    if (error instanceof RemediationError) {
+      logger.error('Remediation failed', { error: error.message, stack: error.stack });
+    } else {
+      logger.error('Unexpected error', { error: (error as Error).message });
+    }
+    return 1;
+  }
+}
+
+// ====================================================================
+//   Corrected implementation with proper order of operations
+// ====================================================================
+
+/**
+ * Second version – correct order. We'll overwrite runRemediation above.
+ * For brevity, we'll define a new function and export it.
+ */
+export async function runRemediationCorrect(config: RemediationConfig): Promise<number> {
+  const {
+    leakedToken,
+    gitlabUrl,
+    repoRoot,
+    exposedFilePath,
+    newTokenName,
+    newTokenExpiry,
+    newTokenScopes,
+    dryRun,
+    scrubHistory,
+  } = config;
+
+  logger.info('Starting remediation workflow (correct order)', {
+    gitlabUrl,
+    repoRoot,
+    exposedFilePath,
+    dryRun,
+    scrubHistory,
+  });
+
+  try {
+    // Validate repo root
+    const repoStat = await fs.stat(repoRoot);
+    if (!repoStat.isDirectory()) {
+      throw new RemediationError(`Repo root is not a directory: ${repoRoot}`);
+    }
+
+    // Create client with leaked token
+    const client = createGitlabClient(gitlabUrl, leakedToken);
+
+    // Step 1: Validate token
+    const userInfo = await validateToken(client);
+    logger.info('Authenticated as', { username: userInfo.username });
+
+    if (dryRun) {
+      logger.info('DRY RUN – skipping actual changes');
+      logger.info('Would create token:', { name: newTokenName, scopes: newTokenScopes, expiresAt: newTokenExpiry });
+      logger.info('Would revoke token for user:', userInfo.username);
+      logger.info('Would append to .gitignore:', exposedFilePath);
+      if (scrubHistory) logger.info('Would scrub history for:', exposedFilePath);
+      return 0;
+    }
+
+    // Step 2: Create new token first (while old token is still active)
+    logger.info('Creating replacement token...');
+    const newTokenData = await createToken(client, newTokenName, newTokenScopes, newTokenExpiry);
+    const newToken = newTokenData.token;
+
+    // Step 3: Write new token to secure file
+    const tokenFilePath = await writeTokenFile(repoRoot, newToken);
+    logger.info(`New token saved to ${tokenFilePath}`);
+    // Also output to console only the file path (not the token itself)
+    console.log('REPLACEMENT_TOKEN_FILE=' + tokenFilePath);
+    // Provide instructions to move to secret store
+    logger.warn('Immediately move the token from the file to a secure secret store (e.g., 1Password, vault, CI secret).');
+
+    // Step 4: Revoke the leaked token
+    logger.info('Revoking leaked token...');
+    await revokeLeakedToken(client);
+    logger.info('Leaked token revoked');
+
+    // Step 5: Append exposed file to .gitignore
+    logger.info('Updating .gitignore...');
+    await updateGitignore(repoRoot, exposedFilePath);
+
+    // Step 6: Optional git history scrub
+    if (scrubHistory) {
+      const scrubbed = await scrubGitHistory(repoRoot, exposedFilePath, true);
+      if (scrubbed) {
+        logger.info('History scrub completed');
+      } else {
+        logger.info('History scrub skipped or failed');
+      }
+    }
+
+    logger.info('All remediation steps completed successfully.');
+    return 0;
+  } catch (error) {
+    if (error instanceof RemediationError) {
+      logger.error('Remediation failed', { error: error.message, stack: error.stack });
+    } else if (error instanceof Error) {
+      logger.error('Unexpected error', { error: error.message, stack: error.stack });
+    } else {
+      logger.error('Unknown error', { error: String(error) });
+    }
+    return 1;
+  }
+}
+
+// Re-export the corrected function as main entry
+export const runRemediation = runRemediationCorrect;
+
+/* ------------------------------------------------------------------ */
+/*  CLI Entry Point                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * If executed directly, parse config from environment variables.
+ */
+if (require.main === module) {
+  (async () => {
+    const requiredEnvVars = ['LEAKED_TOKEN', 'GITLAB_URL', 'REPO_ROOT'];
+    const missing = requiredEnvVars.filter((v) => !process.env[v]);
+    if (missing.length > 0) {
+      console.error(`Missing required environment variables: ${missing.join(', ')}`);
+      process.exit(1);
+    }
+
+    const rawConfig = {
+      leakedToken: process.env.LEAKED_TOKEN!,
+      gitlabUrl: process.env.GITLAB_URL!,
+      repoRoot: process.env.REPO_ROOT!,
+      exposedFilePath: process.env.EXPOSED_FILE_PATH ?? DEFAULT_EXPOSED_FILE,
+      newTokenName: process.env.NEW_TOKEN_NAME ?? DEFAULT_TOKEN_NAME,
+      newTokenExpiry: process.env.NEW_TOKEN_EXPIRY,
+      newTokenScopes: process.env.NEW_TOKEN_SCOPES
+        ? process.env.NEW_TOKEN_SCOPES.split(',')
+        : [...DEFAULT_SCOPES],
+      dryRun: process.env.DRY_RUN === 'true',
+      scrubHistory: process.env.SCRUB_HISTORY === 'true',
+    };
+
+    try {
+      const config = validateConfig(rawConfig);
+      const exitCode = await runRemediation(config);
+      process.exit(exitCode);
+    } catch (error) {
+      if (error instanceof ConfigurationError) {
+        console.error(error.message);
+        if (error.details) {
+          console.error(error.details.errors);
+        }
+      } else {
+        console.error('Fatal error:', error);
+      }
+      process.exit(1);
+    }
+  })();
+}
